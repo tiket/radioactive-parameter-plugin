@@ -4,7 +4,7 @@
     <parent>
         <groupId>org.jenkins-ci.plugins</groupId>
         <artifactId>plugin</artifactId>
-        <version>4.4</version>
+        <version>5.26</version>
         <relativePath />
     </parent>
     <groupId>io.jenkins.plugins</groupId>
@@ -12,23 +12,22 @@
     <version>${revision}${changelist}</version>
     <packaging>hpi</packaging>
     <properties>
-        <revision>1.0</revision>
+        <revision>2.0</revision>
         <changelist>-SNAPSHOT</changelist>
-
-        <!-- Baseline Jenkins version you use to build the plugin. Users must have this version or newer to run. -->
-        <jenkins.version>2.235.1</jenkins.version>
-        <java.level>8</java.level>
+        <!-- https://www.jenkins.io/doc/developer/plugin-development/choosing-jenkins-baseline/ -->
+        <jenkins.baseline>2.504</jenkins.baseline>
+        <jenkins.version>${jenkins.baseline}.3</jenkins.version>
+        <java.level>21</java.level>
     </properties>
     <name>Radioactive Parameter</name>
-    
 
     <dependencyManagement>
         <dependencies>
             <dependency>
                 <!-- Pick up common dependencies for the selected LTS line: https://github.com/jenkinsci/bom#usage -->
                 <groupId>io.jenkins.tools.bom</groupId>
-                <artifactId>bom-2.235.x</artifactId>
-                <version>11</version>
+                <artifactId>bom-${jenkins.baseline}.x</artifactId>
+                <version>5208.vb_69e9d049f68</version>
                 <scope>import</scope>
                 <type>pom</type>
             </dependency>
@@ -60,7 +59,6 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
     
     <!-- If you want this to appear on the plugin site page:
     <developers>
@@ -70,8 +68,6 @@
         <email>bhacker@nowhere.net</email>
       </developer>
     </developers> -->
-
-    
 
     <repositories>
         <repository>
