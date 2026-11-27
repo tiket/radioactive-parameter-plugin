@@ -72,11 +72,6 @@ public class ImageTag {
     }
 
     private static String[] getAuthService(String registry) {
-
-        String[] rtn = new String[3];
-        rtn[0] = ""; // type
-        rtn[1] = ""; // realm
-        rtn[2] = ""; // service
         String url = registry + "/v2/";
 
         Unirest.config().reset();
@@ -87,8 +82,25 @@ public class ImageTag {
 
         if (headerValue == null || headerValue.isEmpty()) {
             logger.warning("No Www-Authenticate header from " + url + " (registry may return 403 instead of 401)");
-            return rtn;
+            return new String[]{"", "", ""};
         }
+
+        String[] rtn = parseAuthenticateHeader(headerValue);
+        if (rtn[0].isEmpty()) {
+            logger.warning("No AuthService available from " + url + " (header: " + headerValue + ")");
+        }
+        return rtn;
+    }
+
+    /**
+     * Parses a Www-Authenticate challenge into {type, realm, service}.
+     * Unparseable challenges return an empty type.
+     */
+    static String[] parseAuthenticateHeader(String headerValue) {
+        String[] rtn = new String[3];
+        rtn[0] = ""; // type
+        rtn[1] = ""; // realm
+        rtn[2] = ""; // service
 
         String type = "";
 
@@ -108,15 +120,18 @@ public class ImageTag {
         if (type.equalsIgnoreCase("Bearer")) {
             // Parse realm and service separately: GCR sends an unquoted service
             // (service=asia.gcr.io), which the upstream single regex rejects.
+            // Only realm is required: Artifact Registry (*-docker.pkg.dev) sends
+            // `Bearer realm="https://<region>-docker.pkg.dev/v2/token"` with no
+            // service, and its token endpoint works without one.
             Matcher realmMatcher = Pattern.compile("realm=\"([^\"]+)\"").matcher(headerValue);
             Matcher serviceMatcher = Pattern.compile("service=\"([^\"]+)\"|service=([^,\\s]+)").matcher(headerValue);
-            if (realmMatcher.find() && serviceMatcher.find()) {
+            if (realmMatcher.find()) {
                 rtn[0] = "Bearer";
                 rtn[1] = realmMatcher.group(1);
-                rtn[2] = serviceMatcher.group(1) != null ? serviceMatcher.group(1) : serviceMatcher.group(2);
+                if (serviceMatcher.find()) {
+                    rtn[2] = serviceMatcher.group(1) != null ? serviceMatcher.group(1) : serviceMatcher.group(2);
+                }
                 logger.info("AuthService: type=Bearer, realm=" + rtn[1] + ", service=" + rtn[2]);
-            } else {
-                logger.warning("No AuthService available from " + url + " (header: " + headerValue + ")");
             }
 
             return rtn;
@@ -163,8 +178,10 @@ public class ImageTag {
         } else {
             logger.info("No basic authentication");
         }
+        if (!service.isEmpty()) {
+            request = request.queryString("service", service);
+        }
         HttpResponse<JsonNode> response = request
-            .queryString("service", service)
             .queryString("scope", "repository:" + image + ":pull")
             .asJson();
         if (response.isSuccess()) {
