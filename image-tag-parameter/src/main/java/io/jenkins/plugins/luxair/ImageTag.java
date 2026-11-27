@@ -85,6 +85,11 @@ public class ImageTag {
             .getHeaders().getFirst("Www-Authenticate");
         Unirest.shutDown();
 
+        if (headerValue == null || headerValue.isEmpty()) {
+            logger.warning("No Www-Authenticate header from " + url + " (registry may return 403 instead of 401)");
+            return rtn;
+        }
+
         String type = "";
 
         String typePattern = "^(\\S+)";
@@ -101,15 +106,17 @@ public class ImageTag {
         }
 
         if (type.equalsIgnoreCase("Bearer")) {
-            String pattern = "Bearer realm=\"(\\S+)\",service=\"([\\S ]+)\"";
-            Matcher m = Pattern.compile(pattern).matcher(headerValue);
-            if (m.find()) {
+            // Parse realm and service separately: GCR sends an unquoted service
+            // (service=asia.gcr.io), which the upstream single regex rejects.
+            Matcher realmMatcher = Pattern.compile("realm=\"([^\"]+)\"").matcher(headerValue);
+            Matcher serviceMatcher = Pattern.compile("service=\"([^\"]+)\"|service=([^,\\s]+)").matcher(headerValue);
+            if (realmMatcher.find() && serviceMatcher.find()) {
                 rtn[0] = "Bearer";
-                rtn[1] = m.group(1);
-                rtn[2] = m.group(2);
-                logger.info("AuthService: type=Bearer, realm=" + rtn[0] + ", service=" + rtn[1]);
+                rtn[1] = realmMatcher.group(1);
+                rtn[2] = serviceMatcher.group(1) != null ? serviceMatcher.group(1) : serviceMatcher.group(2);
+                logger.info("AuthService: type=Bearer, realm=" + rtn[1] + ", service=" + rtn[2]);
             } else {
-                logger.warning("No AuthService available from " + url);
+                logger.warning("No AuthService available from " + url + " (header: " + headerValue + ")");
             }
 
             return rtn;
@@ -135,6 +142,13 @@ public class ImageTag {
 
             return token;
           }
+        }
+
+        // A Google OAuth2 access token is accepted as a registry Bearer token by
+        // GCR and Artifact Registry, so skip the token exchange.
+        if (type.equals("Bearer") && "oauth2accesstoken".equalsIgnoreCase(user) && !password.isEmpty()) {
+            logger.info("Using OAuth2 access token directly (GCR/Artifact Registry)");
+            return password;
         }
 
         String realm = authService[1];

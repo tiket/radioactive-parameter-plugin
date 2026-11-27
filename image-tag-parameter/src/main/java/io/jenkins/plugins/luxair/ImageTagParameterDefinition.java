@@ -17,6 +17,7 @@ import hudson.security.ACL;
 import hudson.util.ListBoxModel;
 import io.jenkins.plugins.luxair.model.Ordering;
 import io.jenkins.plugins.luxair.model.ResultContainer;
+import io.jenkins.plugins.luxair.util.GcpMetadataToken;
 import io.jenkins.plugins.luxair.util.StringUtil;
 import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
@@ -144,9 +145,18 @@ public class ImageTagParameterDefinition extends SimpleParameterDefinition {
         String password = "";
 
         StandardUsernamePasswordCredentials credential = findCredential(credentialId);
-        if (credential != null) {
+        if (credential != null && credential.getPassword() != null) {
             user = credential.getUsername();
             password = credential.getPassword().getPlainText();
+        } else if (GcpMetadataToken.isGoogleRegistry(credentialId, registry)) {
+            // e.g. a gcr:<id> credential backed by GKE Workload Identity has no
+            // password: fall back to the pod's metadata server token.
+            String token = GcpMetadataToken.get();
+            if (token != null) {
+                logger.info("Credential '" + credentialId + "' not usable, using metadata server token");
+                user = "oauth2accesstoken";
+                password = token;
+            }
         }
 
         ResultContainer<List<String>> resultContainer = ImageTag
